@@ -2,20 +2,25 @@ from collections import defaultdict
 import json
 import time
 import itertools
+import classes
 
 # Функция, которая проверяет, удовлетворяет ли вход на турнир entry всем выставленным фильтрам
 def myFilter(filters, entry):
     try:
             # Условие выполняется только если в колоде найдется каждая карта из списка cardlist
-            return ((entry['colorID'] == filters[0] or filters[0] == '')
-                    and ((entry['dateCreated'] >= filters[1]) or (filters[1] == 0))
-                    and ((entry['dateCreated'] <= filters[2]) or (filters[2] == 0))
-                    and (any((commander == entry['commander']) for commander in filters[3]) or filters[3] == set())
-                    and (any((commander != entry['commander']) for commander in filters[4]) or filters[4] == set())
-                    and all((card in set(entry['truedecklist']) for card in filters[5]))
-                    and not any((card in set(entry['truedecklist']) for card in filters[6])))
+            return (any(color == entry['colorID'] for color in filters.colors) or (filters.colors == {})
+                    and ((entry['dateCreated'] >= filters.initialTime) or (filters.initialTime == 0))
+                    and ((entry['dateCreated'] <= filters.finalTime) or (filters.finalTime == 0))
+                    and (any((commander == entry['commander']) for commander in filters.includeCommanders) or filters.includeCommanders == set())
+                    and (any((commander != entry['commander']) for commander in filters.excludeCommanders) or filters.excludeCommanders == set())
+                    and all((card in set(entry['truedecklist']) for card in filters.includeCardList))
+                    and not any((card in set(entry['truedecklist']) for card in filters.excludeCardList)))
     except Exception:
         return False
+
+# Функция, которая считает погрешность измерения винрейта на основе количества игр в выборке
+def inaccuracy(games):
+    return games**(-0.61)
 
 # Функция, которая подсчитывает средний винрейт всех колод в data, удовлетворяющих всем выставленным фильтрам
 def calculateWinrate(filters, data):
@@ -34,18 +39,38 @@ def calculateWinrate(filters, data):
 
     return winrate
 
-# Функция, которая оценивает вклад карт из includeCardList на основе разницы винрейта с ними и без них для колод, удовлетворяющих выставленным фильтрам
-def calculateImpact(filters: list, cardList: set, data: list):
-    winrateWith = calculateWinrate([filters[0], filters[1], filters[2], filters[3], filters[4], cardList.union(filters[5]), filters[6]], data)
-    winrateWithout = calculateWinrate([filters[0], filters[1], filters[2], filters[3], filters[4], filters[5], cardList.union(filters[6])], data)
-    if winrateWith != 0 and winrateWithout != 0:
-        return round(winrateWith - winrateWithout, 2)
+# Функция, которая оценивает вклад карт из cardList на основе разницы винрейта с ними и без них для колод, удовлетворяющих выставленным фильтрам
+def calculateImpact(filters, cardList: set, data):
+    winsWith = 0
+    winsWithout = 0
+    gamesWith = 0
+    gamesWithout = 0
+    impact = 0
+    games = 0
+    for entry in data:
+        if myFilter(filters, entry):
+            try:
+                games += 1
+                if all((card in set(entry['truedecklist']) for card in cardList)):
+                    winsWith += entry['wins']
+                    gamesWith += entry['wins'] + entry['losses']
+                else:
+                    winsWithout += entry['wins']
+                    gamesWithout += entry['wins'] + entry['losses']
+            except:
+                continue
+    if gamesWith != 0 and gamesWithout != 0:
+        winrateWith = winsWith/gamesWith
+        winrateWithout = winsWithout/gamesWithout
+        impact = winrateWith - winrateWithout
+        totalInaccuracy = (inaccuracy(gamesWith)**2 + inaccuracy(gamesWithout)**2)**0.5
+        return [impact, totalInaccuracy]
     else:
-        return 0
+        return [0, 0]
 
 # Функция, которая составляет список рекомендаций среди карт из списка stapleList для колоды includeCardList на основе колод из data, удовлетворяющих выставленным фильтрам
 def calculateIncludeRecomendations(filters, data, stapleList):
-    combinations = [(card, staple) for card in filters[5] for staple in stapleList if not staple in filters[5]]
+    combinations = [(card, staple) for card in filters.includeCardList for staple in stapleList if not staple in filters.includeCardList]
 
     winsWith = defaultdict(int)
     winsWithout = defaultdict(int)
@@ -53,9 +78,13 @@ def calculateIncludeRecomendations(filters, data, stapleList):
     gamesWithout = defaultdict(int)
     synergies = defaultdict(int)
 
+    #этот фильтр отличается от оригинального тем, что не обязывает колоды включать в себя какие-то определенные карты
+    newFilter = filters
+    newFilter.includeCardList = set()
+
     for entry in data:
         try:
-            if myFilter([filters[0], filters[1], filters[2], filters[3], filters[4], [], filters[6]], entry):
+            if myFilter(newFilter, entry):
                 decklist = set(entry['truedecklist'])
                 for combination in combinations:
                     if combination[0] in decklist:
@@ -135,6 +164,7 @@ def calculateExcludeRecomendations(filters, data):
     sorted_synergies = {k: v for k, v in sorted(synergies.items(), key=lambda item: item[1], reverse=False)[:10]}
     return sorted_synergies
 
+# Функция, считающая количество колод с выставленными фильтрами
 def calculatePopularity(filters, data):
     return 0
 
@@ -165,7 +195,6 @@ def mtgaReader(file_name):
             elif in_deck_section and line:
                 card = line.split(' ', 1)[-1]
                 deck_cards.append(card)
-    
     return [' / '.join(commander_cards), deck_cards]
 
 # Функция, читающая деклист с сайта moxfield в формате для moxfield
