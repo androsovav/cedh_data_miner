@@ -1,8 +1,5 @@
 from collections import defaultdict
-import json
-import time
 import itertools
-import classes
 
 # Функция, которая проверяет, удовлетворяет ли вход на турнир entry всем выставленным фильтрам
 def myFilter(filters, entry):
@@ -19,7 +16,7 @@ def myFilter(filters, entry):
         return False
 
 # Функция, которая считает погрешность измерения винрейта на основе количества игр в выборке
-def inaccuracy(games):
+def calculateInaccuracy(games):
     return games**(-0.61)
 
 # Функция, которая подсчитывает средний винрейт всех колод в data, удовлетворяющих всем выставленным фильтрам
@@ -46,11 +43,9 @@ def calculateImpact(filters, cardList: set, data):
     gamesWith = 0
     gamesWithout = 0
     impact = 0
-    games = 0
     for entry in data:
         if myFilter(filters, entry):
             try:
-                games += 1
                 if all((card in set(entry['truedecklist']) for card in cardList)):
                     winsWith += entry['wins']
                     gamesWith += entry['wins'] + entry['losses']
@@ -63,13 +58,13 @@ def calculateImpact(filters, cardList: set, data):
         winrateWith = winsWith/gamesWith
         winrateWithout = winsWithout/gamesWithout
         impact = winrateWith - winrateWithout
-        totalInaccuracy = (inaccuracy(gamesWith)**2 + inaccuracy(gamesWithout)**2)**0.5
-        return [impact, totalInaccuracy]
+        inaccury = (calculateInaccuracy(gamesWith)**2 + calculateInaccuracy(gamesWithout)**2)**0.5
+        return [impact, inaccury]
     else:
         return [0, 0]
 
 # Функция, которая составляет список рекомендаций среди карт из списка stapleList для колоды includeCardList на основе колод из data, удовлетворяющих выставленным фильтрам
-def calculateIncludeRecomendations(filters, data, stapleList):
+def calculateIncludeRecomendations(filters, stapleList, data):
     combinations = [(card, staple) for card in filters.includeCardList for staple in stapleList if not staple in filters.includeCardList]
 
     winsWith = defaultdict(int)
@@ -77,6 +72,7 @@ def calculateIncludeRecomendations(filters, data, stapleList):
     gamesWith = defaultdict(int)
     gamesWithout = defaultdict(int)
     synergies = defaultdict(int)
+    inaccuracy = defaultdict(int)
 
     #этот фильтр отличается от оригинального тем, что не обязывает колоды включать в себя какие-то определенные карты
     newFilter = filters
@@ -98,21 +94,19 @@ def calculateIncludeRecomendations(filters, data, stapleList):
             continue
 
     for combination in combinations:
-        if gamesWith[combination] >= 20 and gamesWithout[combination] >= 20:
+        if gamesWith[combination] and gamesWithout[combination]:
             synergies[combination[1]] = round(((winsWith[combination]/gamesWith[combination]) - (winsWithout[combination]/gamesWithout[combination]))*100, 2)
+            inaccuracy[combination[1]] = round(((calculateInaccuracy(gamesWith[combination])**2 + calculateInaccuracy(gamesWithout[combination])**2)**0.5)*100, 2)
 
-    sorted_synergies = {k: v for k, v in sorted(synergies.items(), key=lambda item: item[1], reverse=True)[:10]}
-    return sorted_synergies
+    sorted_synergies = {k: v for k, v in sorted(synergies.items(), key=lambda item: item[1], reverse=True)}
+    result = dict()
+    for k, v in sorted_synergies.items():
+        result[k] = [v, inaccuracy[k]]
+    return result
 
 # Функция, которая составляет список рекомендаций среди карт из списка stapleList для колоды includeCardList на основе колод из data, удовлетворяющих выставленным фильтрам
 def calculateExcludeRecomendations(filters, data):
     combinations = set(itertools.combinations(filters[5], 2))
-
-    # TODO: УДАЛИТБ
-    # winsWith = defaultdict(int)
-    # winsWithout = defaultdict(int)
-    # gamesWith = defaultdict(int)
-    # gamesWithout = defaultdict(int)
 
     # В этих словарях ключом является комбинация карт, значением является список из побед/игр/винрейтов первой карты из комбинации без второй,
     # второй карты из комбинации без первой, и самой комбинации
@@ -209,88 +203,3 @@ def moxfieldReader(file_name):
                 card_names.add(card_name)
     
     return card_names
-
-# Открываем файл и загружаем данные
-# with open('top16_players_with_cleaned_decklists.json', 'r') as file:
-#     data = json.load(file)
-
-# # Задаем начальные условия
-# colors = 'WUR'
-# initialTime = '01.01.2024'
-# finalTime = ''
-# epochInitialTime = 0
-# epochFinalTime = 0
-# includeCommanders = set()
-# excludeCommanders = set()
-# includeCardList = set()
-# excludeCardList = set()
-
-# stapleList = set(['Sol Ring', 'Mana Crypt', 'Chrome Mox', 'Lotus Petal', 'Arcane Signet', 'Mox Diamond', 'Mana Vault', 'Mystic Remora', 'Rhystic Study', 'Force of Will', 'Jeweled Lotus', 'Mental Misstep', 'Flusterstorm', 'Swan Song', 'Vampiric Tutor', 'Fierce Guardianship', 'The One Ring', 'Demonic Tutor', 'Mox Opal', 'Pact of Negation', 'Dockside Extortionist', 'Cyclonic Rift', 'Mindbreak Trap', 'Fellwar Stone', 'Force of Negation', 'Deflecting Swat', 'Mystical Tutor', 'Orcish Bowmasters', 'Dark Ritual', "An Offer You Can't Refuse", 'Esper Sentinel', 'Silence', 'Tainted Pact', 'Ragavan, Nimble Pilferer', 'Imperial Seal', 'Enlightened Tutor', 'Wishclaw Talisman', 'Chain of Vapor', "Thassa's Oracle", 'Opposition Agent', 'Swords to Plowshares', 'Gamble', 'Ranger-Captain of Eos', "Lion's Eye Diamond", 'Simian Spirit Guide', 'Demonic Consultation', 'Underworld Breach', 'Grand Abolisher', 'Birds of Paradise', 'Red Elemental Blast', 'Drannith Magistrate', 'Mox Amber', 'Phyrexian Metamorph', 'Worldly Tutor', 'Brain Freeze', 'Grim Monolith', 'Diabolic Intent', 'Ad Nauseam', 'Rite of Flame', 'Phantasmal Image', "Sevinne's Reclamation", 'Final Fortune', 'Wheel of Fortune', 'Pyroblast', 'Lotho, Corrupt Shirriff', 'Cabal Ritual', 'Finale of Devastation', 'Mnemonic Betrayal', 'Talisman of Dominance', 'Mana Drain', 'Intuition', 'Snap', 'Dispel', 'Smothering Tithe', 'Culling the Weak', 'Eldritch Evolution', 'Toxic Deluge', 'Elvish Spirit Guide', 'Delighted Halfling', 'Chord of Calling', 'Borne Upon a Wind', 'Veil of Summer', "Jeska's Will", 'Dauthi Voidwalker', 'Gilded Drake', 'Displacer Kitten', 'Teferi, Time Raveler', 'Windfall', 'Archivist of Oghma', 'March of Swirling Mist', 'Bloom Tender', 'Invasion of Ikoria', 'Imperial Recruiter', 'Path to Exile', 'Talisman of Progress', 'Touch the Spirit Realm', 'Deadly Rollick', 'Llanowar Elves', 'Deathrite Shaman', 'Muddle the Mixture', 'Crop Rotation', 'Lightning Bolt', 'Necropotence', 'Reanimate', 'Noble Hierarch', 'Elvish Mystic', "Praetor's Grasp", "Eladamri's Call", 'Hullbreaker Horror', 'Springleaf Drum', 'Abrupt Decay', 'Eternal Witness', 'Fyndhorn Elves', 'Endurance', 'Dress Down', 'Faerie Mastermind', 'Sylvan Library', 'Gitaxian Probe', 'Noxious Revival', 'Flesh Duplicate', 'Blind Obedience', 'Talion, the Kindly Lord', 'Beseech the Mirror', 'Carpet of Flowers', 'Defense Grid', 'Spellseeker', 'Neoform', 'Basalt Monolith', 'Kinnan, Bonder Prodigy', 'Ignoble Hierarch', 'Transmute Artifact', 'Delay', 'Talisman of Creativity', 'Birgi, God of Storytelling', 'Seedborn Muse', "Grafdigger's Cage", 'Culling Ritual', 'Talisman of Indulgence', 'Emiel the Blessed', 'Timetwister', 'Tinder Wall', "Agatha's Soul Cauldron", 'Imposter Mech', 'Entomb', 'Derevi, Empyrial Tactician', "Sensei's Divining Top", 'Wild Growth', 'Talisman of Curiosity', 'Spellskite', 'Manglehorn', "Green Sun's Zenith", 'Abrade', 'Brainstorm', 'Fire Covenant', 'Cursed Totem', 'Resculpt', 'Tezzeret the Seeker', 'Professional Face-Breaker', 'Dauntless Dismantler', 'Kutzil, Malamet Exemplar', 'Dualcaster Mage', 'Force of Vigor', "Yawgmoth's Will", "Avacyn's Pilgrim", 'Sea Gate Restoration', 'Consecrated Sphinx', 'Aven Mindcensor', 'Deafening Silence', 'Spell Pierce', 'Walking Ballista', 'Relic of Legends', 'Dismember', 'Lavinia, Azorius Renegade', 'Miscast', 'Grinding Station', 'Twinflame', 'Faeburrow Elder', 'Wandering Archaic', 'Shatterskull Smashing', 'Animate Dead', 'Birthing Pod', 'Whir of Invention', 'Boromir, Warden of the Tower', 'Survival of the Fittest', "Lim-Dûl's Vault", 'Grim Tutor', 'Mayhem Devil', 'Tidespout Tyrant', 'Moonsilver Key', 'Cursed Mirror', "Assassin's Trophy", 'Temur Sabertooth', 'Elves of Deep Shadow', 'Serra Ascendant', 'Fabricate', 'Necromancy', 'Pongify', 'Tyvar, Jubilant Brawler', 'Karn, the Great Creator', 'Misdirection'])
-
-# # Преобразовываем время из формата дд.мм.гггг во время с начала эпохи и проверяем граничные условия
-# if initialTime != '':
-#     epochInitialTime = round(time.mktime(time.strptime(initialTime, "%d.%m.%Y")))
-# if finalTime != '':
-#     epochFinalTime = round(time.mktime(time.strptime(finalTime, "%d.%m.%Y")))
-# if ((initialTime != '' and finalTime != '' and epochFinalTime < epochInitialTime) or (epochInitialTime > time.time())):
-#         print('Wrong time filter')
-#         exit()
-
-# includeCardList = moxfieldReader('Hinata.txt')
-
-# print(includeCardList)
-
-# filters = [colors, epochInitialTime, epochFinalTime, includeCommanders, excludeCommanders, includeCardList, excludeCardList]
-
-# print('Include recomendations:')
-
-# for card, synergy in calculateIncludeRecomendations(filters, data, stapleList).items():
-#     print(round(synergy, 2), card)
-
-# print('\nExclude recomendations:')
-
-# for card, synergy in calculateExcludeRecomendations(filters, data).items():
-#     print(round(synergy, 2), card)
-
-# cardList = set(['Hullbreaker Horror'])
-# filters[5] = set()
-# print(calculateImpact(filters, data))
-# oswaldCardsWins = defaultdict(int)
-# oswaldCardsGames = defaultdict(int)
-# games = 0
-# wins = 0
-
-# for item in data:
-#     if myFilter(includeCardList, excludeCardList, epochInitialTime, epochFinalTime, colors, includeCommanders, excludeCommanders, item):
-#         try:
-#             for card in set(item['truedecklist']):
-#                 oswaldCardsWins[card] += item['wins']
-#                 oswaldCardsGames[card] += item['wins'] + item['losses']
-#             wins += item['wins']
-#             games += item['wins'] + item['losses']
-#         except Exception:
-#             continue
-        
-
-# oswaldCardWinrates = {}
-# for card in oswaldCardsGames:
-#     if oswaldCardsGames[card] >= games/2:
-#         oswaldCardWinrates[card] = round((oswaldCardsWins[card] / oswaldCardsGames[card])*100, 2)
-
-# sortedOswaldCardWinrates = {k: v for k, v in sorted(oswaldCardWinrates.items(), key=lambda item: item[1], reverse=True)}
-# for card, synergy in sortedOswaldCardWinrates.items():
-#     print(str(synergy)+'%', card)
-# print('Games:', games)
-# print('Average winrate:', round((wins/games)*100, 2))
-
-# synergiesList = {}
-# for staple in stapleList:
-#     if not(staple in includeCardList):
-#         for card in includeCardList:
-#             synergy = calculateImpact(set([staple, card]), excludeCardList, epochInitialTime, epochFinalTime, colors, includeCommanders, excludeCommanders, data)
-#             if synergy != 0:
-#                 synergiesList[staple] = synergy
-
-# sorted_synergies = {k: v for k, v in sorted(synergiesList.items(), key=lambda item: item[1], reverse=True)}
-# for card, synergy in sorted_synergies.items():
-#     print(synergy, card)
