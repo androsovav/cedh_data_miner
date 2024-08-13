@@ -44,16 +44,16 @@ class Filters:
         self.includeCommanders = set(filterObj['includeCommanders'])
         self.excludeCommanders = set(filterObj['excludeCommanders'])
         # Фильтр колод по деклисту
-        with open("sources\criteria\includeCardList.txt", 'r') as file:
+        with open('sources/criteria/includeCardList.txt', 'r') as file:
             if file.readline() == 'Commander':
-                self.includeCardList = functions.mtgaReader("sources\criteria\includeCardList.txt")[1]
+                self.includeCardList = functions.mtgaReader('sources/criteria/includeCardList.txt')[1]
             else:
-                self.includeCardList = functions.moxfieldReader("sources\criteria\includeCardList.txt")
-        with open("sources\criteria\includeCardList.txt", 'r') as file:
+                self.includeCardList = functions.moxfieldReader('sources/criteria/includeCardList.txt')
+        with open('sources/criteria/includeCardList.txt', 'r') as file:
             if file.readline() == 'Commander':
-                self.excludeCardList = functions.mtgaReader("sources\criteria\excludeCardList.txt")[1]
+                self.excludeCardList = functions.mtgaReader('sources/criteria/excludeCardList.txt')[1]
             else:
-                self.excludeCardList = functions.moxfieldReader("sources\criteria\excludeCardList.txt")
+                self.excludeCardList = functions.moxfieldReader('sources/criteria/excludeCardList.txt')
  
     def my_method(self):
         print("Hello from my_method")
