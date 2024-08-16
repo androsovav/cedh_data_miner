@@ -1,5 +1,10 @@
 from collections import defaultdict
 import itertools
+import json
+import requests
+import time
+import mtg_parser
+import os
 
 # Функция, которая проверяет, удовлетворяет ли вход на турнир entry всем выставленным фильтрам
 def myFilter(filters, entry):
@@ -204,9 +209,10 @@ def moxfieldReader(file_name):
     
     return card_names
 
+# Функция, читающая деклист скопированный мной вручную с сайта mtgtop8
 def mtgtop8Reader(file_name):
     # Открываем файл и читаем его содержимое
-    with open('sources/decklists/stapleListMardu.txt', 'r') as file:
+    with open(file_name, 'r') as file:
         lines = file.readlines()
 
     # Извлекаем названия карт и создаем список
@@ -224,3 +230,102 @@ def mtgtop8Reader(file_name):
 
     # Выводим полученный список
     return card_names
+
+# Функция, обновляющая базу данных
+def updateDatabase():
+    #   Берем из файла время последнего обновления, добавляем к нему секунду
+    #   во избежание повторов. Если даты последнего обновления нет, берем 0.
+    try:
+        with open('sources/data/lastUpdateTime.txt', 'r') as file:
+            lastUpdateTime = int(file.read()) + 1
+    except:
+        lastUpdateTime = 0
+
+    #   Выставляем новое время последнего обновления базы данных
+    newUpdateTime = round(time.time())
+    with open('sources/data/lastUpdateTime.txt', 'w') as file:
+        file.write(str(newUpdateTime))
+
+    #   Загружаем базу данных турниров, проведенных после времени
+    #   последнего обновления базы с сайта edhtop16.com
+    base_url = "https://edhtop16.com/api/"
+    headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+    filters = {
+        'tourney_filter': {
+            'dateCreated': {'$gte': lastUpdateTime}
+        }
+    }
+    updateData = json.loads(requests.post(base_url + 'req', json=filters, headers=headers).text)
+
+    try:
+        with open('sources/data/lastElement.txt', 'r') as f:
+            i = int(f.read())+1
+    except:
+        i = 0
+    
+    # Убираем последнюю '}'
+    with open('sources/data/data.json', 'rb+') as f:
+        f.seek(-2, os.SEEK_END)
+        f.truncate()
+
+    #Последовательно присоединяем все новые записи
+    with open('sources/data/data.json', 'a') as f:
+        try:
+            for entry in updateData:
+                newdict = dict()
+                #   Отсеиваем все записи, в которых игрок не сыграл
+                #   ни одной игры либо не указал ссылку на деклист
+                sum = entry['wins'] + entry['draws'] + entry['losses']
+                if ((sum == 0)
+                    or ('decklist' not in entry)
+                    or (entry['decklist'] == "")
+                    or (entry['decklist'] == None)):
+                        continue
+                
+                #   Блок try/except нужен для того, чтобы в случае
+                #   неудачной попытки прочтения деклиста с сайта
+                #   пропускать эту запись
+                try:
+                    decklist = []
+                    url = entry['decklist']
+                    cards = mtg_parser.parse_deck(url)
+
+                    #   Разные сайты содержат деклисты в разных форматах,
+                    #   читаем название карты с первой буквы до первой
+                    #   скобки ( или до конца строки
+                    for card0 in cards:
+                        card = str(card0)
+                        j = 0
+                        while j < len(card):
+                            if card[j].isalpha():
+                                break
+                            j += 1
+                        left = j
+
+                        while j < len(card):
+                            if card[j] == '(':
+                                break
+                            j += 1
+                        right = j-1
+                        if j == len(card):
+                            right += 1
+                        decklist.append(card[left:right])
+                except Exception:
+                    continue
+                
+                #   Добавляем новую запись в базу данных
+                newdict.update({i: dict()})
+                newdict[i].update({'wins': entry['wins']})
+                newdict[i].update({'games': sum})
+                newdict[i].update({'colorID': entry['colorID']})
+                newdict[i].update({'commander': entry['commander']})
+                newdict[i].update({'date': entry['dateCreated']})
+                newdict[i].update({'url': entry['decklist']})
+                newdict[i].update({'decklist': decklist})
+
+                f.write(','+'\n'+'\"'+str(i)+'\": '+json.dumps(newdict[i], indent = ''))
+                i += 1
+        finally:
+            f.write('\n}')
+    with open('sources/data/lastElement.txt', 'w') as f:
+        f.write(str(i))
