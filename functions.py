@@ -1,4 +1,5 @@
 from collections import defaultdict
+import classes
 import itertools
 import json
 import requests
@@ -8,7 +9,7 @@ import os
 import ijson
 
 # Функция, которая проверяет, удовлетворяет ли вход на турнир entry всем выставленным фильтрам
-def myFilter(filters, entry):
+def myFilter(filters: classes.Filters, entry):
     try:
             # Условие выполняется только если в колоде найдется каждая карта из списка cardlist
             return (any(color == entry['colorID'] for color in filters.colors) or (filters.colors == {})
@@ -24,16 +25,22 @@ def myFilter(filters, entry):
 #   Основная функция парсинга базы данных. Принимает на вход фильтры и список из деклистов,
 #   возвращает количество побед, игр, винрейт и погрешность вычисления винрейта для
 #   каждого деклиста в списке.
-def parse(filters, cardList: list, dataFile: str):
+def parse(filters: classes.Filters, listOfCardlists: list, dataFile: str):
 
     #   Инициализируем словарь-результат и словарь, запоминающий присутствие
     #   интересующих карт в деклисте
     res = dict()
-    presenceDict = dict()
-    for i in range(len(cardList)):
+    presence = dict()
+    for card in filters.includeCardList:
+        presence.update({card: False})
+    for card in filters.excludeCardList:
+        presence.update({card: False})
+    for i in range(len(listOfCardlists)):
         res.update({i: {"wins": 0, "games": 0, "winrate": 0, "inaccuracy": 0}})
-        for card in cardList[i]:
-            presenceDict.update({card: False})
+        for card in listOfCardlists[i].including:
+            presence.update({card: False})
+        for card in listOfCardlists[i].excluding:
+            presence.update({card: False})
 
     with open(dataFile, 'r') as file:
         data = ijson.parse(file)
@@ -48,19 +55,20 @@ def parse(filters, cardList: list, dataFile: str):
             #   просмотренный всем требованиям. Если соответствовал, то учитываем его
             #   количество побед и игр. Затем в любом случае обнуляем presenceDict
             if event == "start_map":
-                for i in range(len(cardList)):
-                    if (any(color == colorID for color in filters.colors) or (filters.colors == {})
-                        and ((date >= filters.initialTime) or (filters.initialTime == 0))
-                        and ((date <= filters.finalTime) or (filters.finalTime == 0))
-                        and (any((card == commander) for card in filters.includeCommanders) or filters.includeCommanders == set())
-                        and (any((card != commander) for card in filters.excludeCommanders) or filters.excludeCommanders == set())
-                        and all((presenceDict[card] for card in filters.includeCardList))
-                        and not any((presenceDict[card] for card in filters.excludeCardList))
-                        and all(presenceDict[card] for card in cardList[i])):
-                            res[i].update({"wins": res[i]["wins"]+wins})
-                            res[i].update({"games": res[i]["games"]+games})
-                for card in presenceDict:
-                    presenceDict.update({card: False})
+                if (any(color == colorID for color in filters.colors) or (filters.colors == {})
+                    and ((date >= filters.initialTime) or (filters.initialTime == 0))
+                    and ((date <= filters.finalTime) or (filters.finalTime == 0))
+                    and (any((card == commander) for card in filters.includeCommanders) or filters.includeCommanders == set())
+                    and (any((card != commander) for card in filters.excludeCommanders) or filters.excludeCommanders == set())
+                    and all((presence[card] for card in filters.includeCardList))
+                    and not any((presence[card] for card in filters.excludeCardList))):
+                        for i in range(len(listOfCardlists)):
+                            if (all(presence[card] for card in listOfCardlists[i].including)
+                            and not any(presence[card] for card in listOfCardlists[i].excluding)):
+                                res[i].update({"wins": res[i]["wins"]+wins})
+                                res[i].update({"games": res[i]["games"]+games})
+                for card in presence:
+                    presence.update({card: False})
                 continue
             if prefix.endswith('.wins'):
                 wins = value
@@ -73,15 +81,30 @@ def parse(filters, cardList: list, dataFile: str):
             elif prefix.endswith('.date'):
                 date = value
             elif prefix.endswith('.decklist.item'):
-                for card in presenceDict:
-                    if card == value:
-                        presenceDict.update({card: True})
+                if value in presence:
+                    presence.update({value: True})
     
     #   Зная количество побед и игр, подсчитываем винрейт и погрешность и записываем их в результат
-    for i in range(len(cardList)):
-        res[i].update({"winrate": res[i]["wins"]/res[i]["games"]})
-        res[i].update({"inaccuracy": res[i]["games"]**(-0.61)})
+    for i in range(len(listOfCardlists)):
+        if res[i]["games"] != 0:
+            res[i].update({"winrate": res[i]["wins"]/res[i]["games"]})
+            res[i].update({"inaccuracy": res[i]["games"]**(-0.61)})
 
+    return res
+
+def newCalculateImpact(filters: classes.Filters, listOfSets: list, dataFile: str):
+    listOfCardlists = []
+    for i in range(len(listOfSets)):
+        listOfCardlists.append(classes.cardlist(listOfSets[i], set()))
+        listOfCardlists.append(classes.cardlist(set(), listOfSets[i]))
+    parseRes = parse(filters, listOfCardlists, dataFile)
+    res = []
+
+    for i in range(len(listOfSets)):
+        res.append({})
+        res[i].update({"set": listOfSets[i]})
+        res[i].update({"impact": parseRes[2*i]["winrate"]-parseRes[2*i+1]["winrate"]})
+        res[i].update({"inaccuracy": (parseRes[2*i]["inaccuracy"]**2 + parseRes[2*i+1]["inaccuracy"]**2)**0.5})
     return res
 
 # Функция, которая считает погрешность измерения винрейта на основе количества игр в выборке
@@ -89,7 +112,7 @@ def calculateInaccuracy(games):
     return games**(-0.61)
 
 # Функция, которая подсчитывает средний винрейт всех колод в data, удовлетворяющих всем выставленным фильтрам
-def calculateWinrate(filters, data):
+def calculateWinrate(filters: classes.Filters, data):
     wins = 0
     games = 0
 
@@ -106,7 +129,7 @@ def calculateWinrate(filters, data):
     return winrate
 
 # Функция, которая оценивает вклад карт из cardList на основе разницы винрейта с ними и без них для колод, удовлетворяющих выставленным фильтрам
-def calculateImpact(filters, cardList: set, data):
+def calculateImpact(filters: classes.Filters, cardList: set, data):
     winsWith = 0
     winsWithout = 0
     gamesWith = 0
@@ -133,7 +156,7 @@ def calculateImpact(filters, cardList: set, data):
         return [0, 0]
 
 # Функция, которая составляет список рекомендаций среди карт из списка stapleList для колоды includeCardList на основе колод из data, удовлетворяющих выставленным фильтрам
-def calculateIncludeRecomendations(filters, stapleList, data):
+def calculateIncludeRecomendations(filters: classes.Filters, stapleList, data):
     combinations = [(card, staple) for card in filters.includeCardList for staple in stapleList if not staple in filters.includeCardList]
 
     winsWith = defaultdict(int)
@@ -174,7 +197,7 @@ def calculateIncludeRecomendations(filters, stapleList, data):
     return result
 
 # Функция, которая составляет список рекомендаций среди карт из списка stapleList для колоды includeCardList на основе колод из data, удовлетворяющих выставленным фильтрам
-def calculateExcludeRecomendations(filters, data):
+def calculateExcludeRecomendations(filters: classes.Filters, data):
     combinations = set(itertools.combinations(filters[5], 2))
 
     # В этих словарях ключом является комбинация карт, значением является список из побед/игр/винрейтов первой карты из комбинации без второй,
@@ -228,72 +251,8 @@ def calculateExcludeRecomendations(filters, data):
     return sorted_synergies
 
 # Функция, считающая количество колод с выставленными фильтрами
-def calculatePopularity(filters, data):
+def calculatePopularity(filters: classes.Filters, data):
     return 0
-
-# Функция, читающая деклист с сайта mtggoldfish в формате для MTGA
-def mtgaReader(file_name):
-    commander_cards = []
-    deck_cards = []
-    in_deck_section = False
-    in_commander_section = False
-    
-    with open(file_name, 'r') as file:
-        for line in file:
-            line = line.strip()
-            
-            if line == 'Commander':
-                in_commander_section = True
-                in_deck_section = False
-                continue
-            elif line == 'Deck':
-                in_commander_section = False
-                in_deck_section = True
-                continue
-            
-            if in_commander_section and line:
-                cmdr_card = line.split(' ', 1)[-1]
-                commander_cards.append(cmdr_card)
-                deck_cards.append(cmdr_card)  # Добавляем командира в список карт
-            elif in_deck_section and line:
-                card = line.split(' ', 1)[-1]
-                deck_cards.append(card)
-    return [' / '.join(commander_cards), deck_cards]
-
-# Функция, читающая деклист с сайта moxfield в формате для moxfield
-def moxfieldReader(file_name):
-    card_names = set()  # Инициализация пустого набора set()
-    
-    with open(file_name, 'r') as file:
-        for line in file:
-            card_info = line.split('(')[0].split(' ', 2)
-            if len(card_info) > 1:
-                card_name = ' '.join(card_info[1:]).strip()  # Объединяем слова, начиная с второго и удаляем лишние пробелы
-                card_names.add(card_name)
-    
-    return card_names
-
-# Функция, читающая деклист скопированный мной вручную с сайта mtgtop8
-def mtgtop8Reader(file_name):
-    # Открываем файл и читаем его содержимое
-    with open(file_name, 'r') as file:
-        lines = file.readlines()
-
-    # Извлекаем названия карт и создаем список
-    card_names = []
-    for line in lines:
-        # Разбиваем строку на части
-        parts = line.split()
-        # Сбор названий карт до первого элемента, который начинается с цифры
-        card_name = []
-        for part in parts:
-            if part[0].isdigit():  # Если первый символ - цифра, прерываем
-                break
-            card_name.append(part)  # Иначе добавляем в название карты
-        card_names.append(' '.join(card_name))  # Объединяем название в строку
-
-    # Выводим полученный список
-    return card_names
 
 # Функция, обновляющая базу данных
 def updateDatabase():
@@ -321,75 +280,65 @@ def updateDatabase():
     }
     updateData = json.loads(requests.post(base_url + 'req', json=filters, headers=headers).text)
 
-    try:
-        with open('sources/data/lastElement.txt', 'r') as f:
-            i = int(f.read())+1
-    except:
-        i = 0
-    
-    # Убираем последнюю '}'
-    with open('sources/data/data.json', 'rb+') as f:
-        f.seek(-2, os.SEEK_END)
-        f.truncate()
-
-    #Последовательно присоединяем все новые записи
-    with open('sources/data/data.json', 'a') as f:
-        try:
-            for entry in updateData:
-                newdict = dict()
-                #   Отсеиваем все записи, в которых игрок не сыграл
-                #   ни одной игры либо не указал ссылку на деклист
-                sum = entry['wins'] + entry['draws'] + entry['losses']
-                if ((sum == 0)
-                    or ('decklist' not in entry)
-                    or (entry['decklist'] == "")
-                    or (entry['decklist'] == None)):
-                        continue
-                
-                #   Блок try/except нужен для того, чтобы в случае
-                #   неудачной попытки прочтения деклиста с сайта
-                #   пропускать эту запись
-                try:
-                    decklist = []
-                    url = entry['decklist']
-                    cards = mtg_parser.parse_deck(url)
-
-                    #   Разные сайты содержат деклисты в разных форматах,
-                    #   читаем название карты с первой буквы до первой
-                    #   скобки ( или до конца строки
-                    for card0 in cards:
-                        card = str(card0)
-                        j = 0
-                        while j < len(card):
-                            if card[j].isalpha():
-                                break
-                            j += 1
-                        left = j
-
-                        while j < len(card):
-                            if card[j] == '(':
-                                break
-                            j += 1
-                        right = j-1
-                        if j == len(card):
-                            right += 1
-                        decklist.append(card[left:right])
-                except Exception:
+    with open('sources/data/data.json', 'r') as f:
+        data = json.load(f)
+        for entry in updateData:
+            #   Отсеиваем все записи, в которых игрок не сыграл
+            #   ни одной игры либо не указал ссылку на деклист,
+            #   либо сыграл все игры вничью
+            sum = entry['wins'] + entry['losses']
+            if ((sum == 0)
+                or ('decklist' not in entry)
+                or (entry['decklist'] == "")
+                or (entry['decklist'] == None)):
                     continue
-                
-                #   Добавляем новую запись в базу данных
-                newdict.update({i: dict()})
-                newdict[i].update({'wins': entry['wins']})
-                newdict[i].update({'games': sum})
-                newdict[i].update({'colorID': entry['colorID']})
-                newdict[i].update({'commander': entry['commander']})
-                newdict[i].update({'date': entry['dateCreated']})
-                newdict[i].update({'url': entry['decklist']})
-                newdict[i].update({'decklist': decklist})
+            
+            #   Блок try/except нужен для того, чтобы в случае
+            #   неудачной попытки прочтения деклиста с сайта
+            #   пропускать эту запись
+            try:
+                decklist = []
+                url = entry['decklist']
+                cards = mtg_parser.parse_deck(url)
 
-                f.write(','+'\n'+'\"'+str(i)+'\": '+json.dumps(newdict[i], indent = ''))
-                i += 1
-        finally:
-            f.write('\n}')
-    with open('sources/data/lastElement.txt', 'w') as f:
-        f.write(str(i))
+                #   Разные сайты содержат деклисты в разных форматах,
+                #   читаем название карты с первой буквы до первой
+                #   скобки ( или до конца строки
+                for card0 in cards:
+                    card = str(card0)
+                    j = 0
+                    while j < len(card):
+                        if card[j].isalpha():
+                            break
+                        j += 1
+                    left = j
+
+                    while j < len(card):
+                        if card[j] == '(':
+                            break
+                        j += 1
+                    right = j-1
+                    if j == len(card):
+                        right += 1
+                    decklist.append(card[left:right])
+            except Exception:
+                continue
+            
+            #   Добавляем новую запись в базу данных
+            if entry['decklist'] not in data:
+                data.update({entry['decklist']: {
+                    "wins": 0,
+                    "games": 0,
+                    "colorID": entry["colorID"],
+                    "commander": entry["commander"],
+                    "date": entry["dateCreated"],
+                    "decklist": decklist          
+                }})
+            data[entry['decklist']].update({
+                "wins": data[entry['decklist']]["wins"]+entry["wins"],
+                "games": data[entry['decklist']]["games"]+sum,
+                "date": entry["dateCreated"]
+            })
+    
+    with open('sources/data/data.json', 'w') as f:
+        json.dump(data, f, indent= '')

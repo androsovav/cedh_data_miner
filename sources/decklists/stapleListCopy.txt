@@ -1,0 +1,160 @@
+C Sol Ring
+C Mana Crypt
+C Chrome Mox
+C Lotus Petal
+C Arcane Signet
+C Mox Diamond
+C Mana Vault
+U Mystic Remora
+U Rhystic Study
+U Force of Will
+U Flusterstorm
+U Mental Misstep
+C Jeweled Lotus
+U Swan Song
+C The One Ring
+C Fierce Guardianship
+U Mindbreak Trap
+U Pact of Negation
+R Dockside Extortionist
+B Vampiric Tutor
+C Mox Opal
+B Demonic Tutor
+U Force of Negation
+U Cyclonic Rift
+R Deflecting Swat
+C Fellwar Stone
+B Orcish Bowmasters
+U Mystical Tutor
+U An Offer You Can't Refuse
+B Dark Ritual
+R Ragavan, Nimble Pilferer
+U Chain of Vapor
+B Tainted Pact
+W Esper Sentinel
+B Wishclaw Talisman
+W Silence
+B Imperial Seal
+U Thassa's Oracle
+R Gamble
+W Enlightened Tutor
+C Lion's Eye Diamond
+R Simian Spirit Guide
+B Opposition Agent
+R Underworld Breach
+U Phyrexian Metamorph
+W Swords to Plowshares
+R Red Elemental Blast
+G Birds of Paradise
+B Demonic Consultation
+C Mox Amber
+W Ranger-Captain of Eos
+W Grand Abolisher
+G Worldly Tutor
+U Brain Freeze
+R Pyroblast
+B Diabolic Intent
+W Drannith Magistrate
+R Rite of Flame
+B Ad Nauseam
+R Wheel of Fortune
+G Finale of Devastation
+R Final Fortune
+WB Lotho, Corrupt Shirriff
+U Phantasmal Image
+C Grim Monolith
+B Cabal Ritual
+W Sevinne's Reclamation
+UB Mnemonic Betrayal
+U Borne Upon a Wind
+U Snap
+W Smothering Tithe
+C Talisman of Dominance
+G Delighted Halfling
+U Intuition
+G Eldritch Evolution
+G Chord of Calling
+G Elvish Spirit Guide
+BG Culling the Weak
+U Mana Drain
+G Veil of Summer
+B Toxic Deluge
+R Jeska's Will
+U Displacer Kitten
+U Dispel
+U Flesh Duplicate
+WU Teferi, Time Raveler
+B Necropotence
+G Invasion of Ikoria
+G Crop Rotation
+B Deadly Rollick
+R Imperial Recruiter
+U Windfall
+U Gilded Drake
+G Deathrite Shaman
+B Reanimate
+G Bloom Tender
+B Praetor's Grasp
+U March of Swirling Mist
+C Springleaf Drum
+W Archivist of Oghma
+BG Abrupt Decay
+UB Talion, the Kindly Lord
+W Touch the Spirit Realm
+U Hullbreaker Horror
+B Dauthi Voidwalker
+G Eternal Witness
+B Beseech the Mirror
+U Muddle the Mixture
+W Path to Exile
+R Lightning Bolt
+G Noble Hierarch
+G Llanowar Elves
+C Talisman of Progress
+WG Eladamri's Call
+G Elvish Mystic
+G Endurance
+G Noxious Revival
+UG Kinnan, Bonder Prodigy
+C Defense Grid
+W Blind Obedience
+G Fyndhorn Elves
+R Birgi, God of Storytelling
+U Gitaxian Probe
+UG Neoform
+G Ignoble Hierarch
+U Spellseeker
+U Dress Down
+C Agatha's Soul Cauldron
+U Transmute Artifact
+C Basalt Monolith
+U Spellskite
+C Talisman of Creativity
+G Carpet of Flowers
+W Emiel the Blessed
+U Faerie Mastermind
+G Sylvan Library
+C Talisman of Indulgence
+G Green Sun's Zenith
+BG Culling Ritual
+G Seedborn Muse
+C Grafdigger's Cage
+WG Kutzil, Malamet Exemplar
+U Timetwister
+U Imposter Mech
+W Dauntless Dismantler
+WUG Derevi, Empyrial Tactician
+RG Tinder Wall
+U Delay
+B Entomb
+R Dualcaster Mage
+G Manglehorn
+U Tezzeret the Seeker
+G Force of Vigor
+C Cursed Totem
+G Wild Growth
+C Sensei's Divining Top
+B Yawgmoth's Will
+C Talisman of Curiosity
+R Abrade
+C Grinding Station

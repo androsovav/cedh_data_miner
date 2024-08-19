@@ -1,5 +1,5 @@
 import time
-import functions
+import readers
 from itertools import combinations
 
 class Filters:
@@ -46,14 +46,16 @@ class Filters:
         # Фильтр колод по деклисту
         with open('sources/criteria/includeCardList.txt', 'r') as file:
             if file.readline() == 'Commander':
-                self.includeCardList = functions.mtgaReader('sources/criteria/includeCardList.txt')[1]
+                self.includeCardList = readers.mtgaReader('sources/criteria/includeCardList.txt')[1]
             else:
-                self.includeCardList = functions.moxfieldReader('sources/criteria/includeCardList.txt')
+                self.includeCardList = readers.moxfieldReader('sources/criteria/includeCardList.txt')
         with open('sources/criteria/includeCardList.txt', 'r') as file:
             if file.readline() == 'Commander':
-                self.excludeCardList = functions.mtgaReader('sources/criteria/excludeCardList.txt')[1]
+                self.excludeCardList = readers.mtgaReader('sources/criteria/excludeCardList.txt')[1]
             else:
-                self.excludeCardList = functions.moxfieldReader('sources/criteria/excludeCardList.txt')
- 
-    def my_method(self):
-        print("Hello from my_method")
+                self.excludeCardList = readers.moxfieldReader('sources/criteria/excludeCardList.txt')
+    
+class cardlist:
+    def __init__(self, including: set, excluding: set) -> None:
+        self.including = including
+        self.excluding = excluding
