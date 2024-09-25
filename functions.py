@@ -27,7 +27,7 @@ def myFilter(filters: classes.Filters, entry):
 #   каждого деклиста в списке.
 def parse(filters: classes.Filters, listOfCardlists: list, dataFile: str):
 
-    #   Инициализируем словарь-результат и словарь, запоминающий присутствие
+    #   Инициализируем словарь-результат и словарь presence, запоминающий присутствие
     #   интересующих карт в деклисте
     res = dict()
     presence = dict()
@@ -84,27 +84,74 @@ def parse(filters: classes.Filters, listOfCardlists: list, dataFile: str):
                 if value in presence:
                     presence.update({value: True})
     
-    #   Зная количество побед и игр, подсчитываем винрейт и погрешность и записываем их в результат
+    #  Зная количество побед и игр, подсчитываем винрейт и погрешность и записываем их в результат
     for i in range(len(listOfCardlists)):
         if res[i]["games"] != 0:
             res[i].update({"winrate": res[i]["wins"]/res[i]["games"]})
             res[i].update({"inaccuracy": res[i]["games"]**(-0.61)})
+    #   Сортируем полученный результат
+    sorted_res = {k: v for k, v in sorted(res.items(), key=lambda item: item[1]["winrate"]-item[1]["inaccuracy"], reverse=True)}
+    final_res = []
+    #   Возвращаем результат в формате [[список карт, его показатели], ...]
+    for item in sorted_res:
+        final_res.append([listOfCardlists[item], sorted_res[item]])
+    return final_res
 
-    return res
-
+# Функция, которая оценивает вклад в победу каждого из наборов карт в listOfSets
+# на основе разницы винрейта колод с этим набором карт и без него с учетом выставленных фильтров
 def newCalculateImpact(filters: classes.Filters, listOfSets: list, dataFile: str):
     listOfCardlists = []
+    #   Формируем список из наборов карт для функции parse. Для каждого набора из listOfSets
+    #   будет учтена статистика колод, включающих каждую карту этого набора, и колод,
+    #   исключающих каждую карту этого набора
     for i in range(len(listOfSets)):
         listOfCardlists.append(classes.cardlist(listOfSets[i], set()))
         listOfCardlists.append(classes.cardlist(set(), listOfSets[i]))
+    
     parseRes = parse(filters, listOfCardlists, dataFile)
+
     res = []
 
+    #   Теперь из данных, возвращенных функцией parse, нужно извлечь все необходимое. В список res
+    #   для каждого набора попадет информация о винрейте с ним и без него, количестве игр
+    #   с ним и без него, а так же погрешности для рассчета конечной погрешности
     for i in range(len(listOfSets)):
-        res.append({})
-        res[i].update({"set": listOfSets[i]})
-        res[i].update({"impact": parseRes[2*i]["winrate"]-parseRes[2*i+1]["winrate"]})
-        res[i].update({"inaccuracy": (parseRes[2*i]["inaccuracy"]**2 + parseRes[2*i+1]["inaccuracy"]**2)**0.5})
+        gamesWith = 0
+        gamesWithout = 0
+        winrateWith = 0
+        winrateWithout = 0
+        impact = 0
+        inaccuracyWith = 0
+        inaccuracyWithout = 0
+        inaccuracy = 0
+        for j in range(len(parseRes)):
+            if parseRes[j][0].including == listOfSets[i]:
+                winrateWith = parseRes[j][1]["winrate"]
+                inaccuracyWith = parseRes[j][1]["inaccuracy"]
+                gamesWith = parseRes[j][1]["games"]
+            if parseRes[j][0].excluding == listOfSets[i]:
+                winrateWithout = parseRes[j][1]["winrate"]
+                inaccuracyWithout = parseRes[j][1]["inaccuracy"]
+                gamesWithout = parseRes[j][1]["games"]
+                
+        #   Импакт, он же вклад, рассчитывается как разница винрейтов колод с этим набором карт и без него
+        impact = winrateWith - winrateWithout
+
+        #   Погрешность импакта рассчитывается из погрешностей винрейтов с набором карт и без него
+        inaccuracy = (inaccuracyWith**2 + inaccuracyWithout**2)**0.5
+        res.append([listOfSets[i], {"impact": impact, "inaccuracy": inaccuracy, "winrateWith": winrateWith, "gamesWith": gamesWith, "winrateWithout": winrateWithout, "gamesWithout": gamesWithout}])
+    
+    #   Полученный список сортируется по разнице импакта и погрешности. Сортирую именно так, чтобы
+    #   в верху полученного списка не оказались карты с сильно завышенным импактом в силу
+    #   недостоверности собранной статистики
+    res.sort(key=lambda item: item[1]["impact"]-item[1]["inaccuracy"], reverse= True)
+    
+    #   Винрейты, импакты и погрешности умножаю на 100 и округляю до 2 знака после запятой для улучшения читаемости
+    for i in range(len(res)):
+        for item in res[i][1]:
+            if (item is not "gamesWith"
+                and item is not "gamesWithout"):
+                res[i][1][item] = round(res[i][1][item]*100, 2)
     return res
 
 # Функция, которая считает погрешность измерения винрейта на основе количества игр в выборке
